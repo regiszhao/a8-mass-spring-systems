@@ -16,13 +16,40 @@ bool fast_mass_springs_precomputation_sparse(
   Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > & prefactorization)
 {
   /////////////////////////////////////////////////////////////////////////////
-  // Replace with your code
-  std::vector<Eigen::Triplet<double> > ijv;
-  const int n = V.rows();
-  for(int i = 0;i<n;i++) ijv.emplace_back(i,i,1);
-  Eigen::SparseMatrix<double> Q(n,n);
-  Q.setFromTriplets(ijv.begin(),ijv.end());
-  /////////////////////////////////////////////////////////////////////////////
-  prefactorization.compute(Q);
-  return prefactorization.info() != Eigen::NumericalIssue;
+
+	int num_vertices = V.rows();
+
+	// calculate M 
+	M.resize(num_vertices, num_vertices);
+	// initialize triplet list
+	std::vector<Eigen::Triplet<double> > m_ijv;
+	// loop through masses
+	for (int mass = 0; mass < num_vertices; mass++) {
+		m_ijv.emplace_back(mass, mass, m(mass));
+	}
+	M.setFromTriplets(m_ijv.begin(),m_ijv.end());
+
+	// A
+	signed_incidence_matrix_sparse(num_vertices, E, A);
+
+	// r
+	Eigen::MatrixXd edge_vecs = A * V;
+	r = edge_vecs.rowwise().norm();
+
+	// C
+	int num_pinned = b.size();
+	C.resize(num_pinned, num_vertices);
+	// initialize triplet list
+	std::vector<Eigen::Triplet<double> > c_ijv;
+	// loop through pinned vertices
+	for (int pinned = 0; pinned < num_pinned; pinned++) {
+		c_ijv.emplace_back(pinned, b(pinned), 1);
+	}
+	C.setFromTriplets(c_ijv.begin(),c_ijv.end());
+
+	// Q
+	double w = 1e10;
+	Eigen::SparseMatrix<double> Q = (k * A.transpose() * A) + ((1 / pow(delta_t, 2)) * M) + (w * C.transpose() * C);
+	prefactorization.compute(Q);
+	return prefactorization.info() != Eigen::NumericalIssue;
 }
